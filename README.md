@@ -1,9 +1,25 @@
 # Trip photos
 
 A minimal photo site: a diamond of subjects → every photo of that subject → one photo with its tags.
-No login, no database. **Your Lightroom keywords are the tags**, and pushing to GitHub publishes the site.
+No login, no database. Tag with the built-in tagger or Lightroom keywords, and pushing to GitHub publishes the site.
 
 ## Adding photos
+
+There are two ways to tag. You can use either one, or both together.
+
+### Option A — the built-in tagger (no Lightroom needed)
+
+1. Copy your photos (JPEG) into the [`photos/`](photos) folder.
+2. Double-click **Tag photos.html**. It opens in Microsoft Edge or Chrome.
+   (If it opens in another browser: right-click it → Open with → Microsoft Edge.)
+3. Click **Choose folder…**, pick this `site` folder and click **Allow / Edit files** when the browser asks.
+4. Click a photo, then add **People**, **Places** and **Things**. Click a tag you already used to reuse it.
+   Ctrl- or Shift-click several photos to tag them all at once. The **Untagged** filter shows what's left.
+5. Tags save automatically to `photos/tags.json`. Commit and push in GitHub Desktop as usual.
+
+Tip: add both `Turkey` and `Istanbul` as places if you want the photo under both.
+
+### Option B — Lightroom Classic keywords
 
 1. **Tag in Lightroom Classic** using a keyword hierarchy (Library → Keyword List):
 

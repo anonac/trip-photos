@@ -36,7 +36,7 @@ const slugify = (s) =>
 const list = (v) => (v == null ? [] : Array.isArray(v) ? v : [v])
   .map((x) => String(x).trim()).filter(Boolean);
 
-function readTags(meta) {
+function readTags(meta, fromFile = {}) {
   const tags = []; // [{ name, kind }] in display order
   const seen = new Set();
   const add = (name, kind) => {
@@ -45,6 +45,9 @@ function readTags(meta) {
     seen.add(key);
     tags.push({ name, kind });
   };
+
+  for (const [field, kind] of [["people", "person"], ["places", "place"], ["things", "thing"]])
+    for (const name of list(fromFile[field])) add(name, kind);
 
   for (const entry of list(meta.hierarchicalSubject)) {
     const parts = entry.split("|").map((p) => p.trim()).filter(Boolean);
@@ -73,6 +76,14 @@ async function main() {
     ? (await readdir(SRC, { recursive: true }))
         .filter((f) => IMAGE.test(f)).sort()
     : [];
+
+  // Tags written by "Tag photos.html": { "file.jpg": { people: [], places: [], things: [] } }
+  const tagFilePath = path.join(SRC, "tags.json");
+  let tagFile = {};
+  if (existsSync(tagFilePath)) {
+    try { tagFile = JSON.parse(await readFile(tagFilePath, "utf8")); }
+    catch (e) { console.warn(`! photos/tags.json could not be read: ${e.message}`); }
+  }
 
   const photos = [];
   const tags = {};
@@ -109,7 +120,7 @@ async function main() {
       }
     }
 
-    const photoTags = readTags(meta);
+    const photoTags = readTags(meta, tagFile[rel.replace(/\\/g, "/")]);
     for (const t of photoTags) {
       const slug = slugify(t.name);
       tags[slug] ??= { name: t.name, kind: t.kind, count: 0 };

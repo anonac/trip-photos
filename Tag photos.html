@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tag photos</title>
+<style>
+  :root {
+    --bg: #0b0a09; --panel: #131210; --tile: #1c1a17; --line: #26231f;
+    --fg: #e9e4d8; --muted: #8a8478; --faint: #4a463f; --accent: #d9a24a;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); }
+  body { font: 13px/1.5 ui-sans-serif, system-ui, "Segoe UI", sans-serif; display: flex; flex-direction: column; }
+  button, input { font: inherit; color: inherit; }
+  button { background: none; border: 1px solid var(--line); border-radius: 4px; padding: 6px 12px; cursor: pointer; }
+  button:hover { border-color: var(--muted); }
+  button.primary { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+
+  header { display: flex; align-items: center; gap: 16px; padding: 10px 16px; border-bottom: 1px solid var(--line); }
+  header .name { color: var(--muted); }
+  header .spacer { flex: 1; }
+  .filter { display: flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+  .filter button { border: 0; border-radius: 0; color: var(--muted); }
+  .filter button.on { background: var(--tile); color: var(--fg); }
+  #status { color: var(--muted); min-width: 60px; text-align: right; }
+
+  #welcome { flex: 1; display: grid; place-items: center; text-align: center; padding: 24px; }
+  #welcome p { color: var(--muted); max-width: 420px; }
+
+  #app { flex: 1; display: grid; grid-template-columns: 300px minmax(0, 1fr) 340px; min-height: 0; }
+  #thumbs { overflow-y: auto; padding: 8px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; align-content: start; border-right: 1px solid var(--line); }
+  .thumb { position: relative; aspect-ratio: 1; background: var(--tile); cursor: pointer; overflow: hidden; outline: 2px solid transparent; outline-offset: -2px; }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .thumb.sel { outline-color: var(--fg); }
+  .thumb.sel:not(.cur) { outline-color: var(--muted); }
+  .thumb .dot { position: absolute; right: 4px; top: 4px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px rgb(0 0 0 / .4); }
+
+  #preview { display: grid; place-items: center; padding: 16px; min-height: 0; position: relative; }
+  #preview img { max-width: 100%; max-height: calc(100vh - 110px); object-fit: contain; display: block; }
+  #preview .caption { position: absolute; bottom: 8px; left: 0; right: 0; text-align: center; color: var(--muted); }
+  .stack { display: grid; grid-template-columns: repeat(3, minmax(0, 120px)); gap: 6px; }
+  .stack img { width: 100%; aspect-ratio: 1; object-fit: cover; }
+
+  #panel { border-left: 1px solid var(--line); padding: 16px; overflow-y: auto; background: var(--panel); }
+  .kind { margin-bottom: 26px; }
+  .kind h2 { margin: 0 0 8px; font-size: 11px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+  .kind h2 kbd { float: right; font: inherit; color: var(--faint); letter-spacing: 0; }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .chip { border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; cursor: pointer; background: none; font-size: 12px; }
+  .chip.on { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+  .chip.on::after { content: " ×"; opacity: .6; }
+  .chip.part { border-color: var(--muted); border-style: dashed; }
+  .chip:not(.on):hover { border-color: var(--muted); }
+  .kind input { width: 100%; margin: 8px 0; padding: 6px 10px; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; outline: none; }
+  .kind input:focus { border-color: var(--muted); }
+  .help { color: var(--faint); font-size: 12px; margin-top: 30px; line-height: 1.7; }
+  .help b { color: var(--muted); font-weight: 500; }
+</style>
+</head>
+<body>
+<header>
+  <strong>Tag photos</strong>
+  <span class="name" id="folderName"></span>
+  <span class="spacer"></span>
+  <div class="filter" id="filter" hidden>
+    <button data-f="all" class="on">All</button>
+    <button data-f="untagged">Untagged</button>
+  </div>
+  <span id="count"></span>
+  <span id="status"></span>
+</header>
+
+<div id="welcome">
+  <div>
+    <p id="unsupported" hidden>This needs <b>Microsoft Edge</b> or <b>Google Chrome</b>. Right-click this file → Open with → Microsoft Edge.</p>
+    <div id="openArea">
+      <button class="primary" id="reopen" hidden></button>
+      <p>Choose your <b>site</b> folder (or the <b>photos</b> folder inside it).<br>Tags are saved to <code>photos/tags.json</code> as you go.</p>
+      <button id="open">Choose folder…</button>
+    </div>
+  </div>
+</div>
+
+<div id="app" hidden>
+  <div id="thumbs"></div>
+  <div id="preview"></div>
+  <div id="panel">
+    <div id="kinds"></div>
+    <div class="help">
+      <b>Click</b> a tag to add or remove it.<br>
+      <b>Type</b> a new one and press Enter.<br>
+      <b>Ctrl/Shift-click</b> photos to tag several at once.<br>
+      <b>← →</b> next / previous photo · <b>1 2 3</b> jump to a box<br>
+      Dashed tags are on some of the selected photos.
+    </div>
+  </div>
+</div>
+
+<script>
+const KINDS = [
+  { key: "people", label: "People" },
+  { key: "places", label: "Places" },
+  { key: "things", label: "Things" },
+];
+const IMAGE = /\.(jpe?g|png|webp)$/i;
+const $ = (s) => document.querySelector(s);
+
+let dir = null;          // the photos folder
+let files = [];          // [{ path, handle }]
+let tags = {};           // path -> { people: [], places: [], things: [] }
+let selected = new Set();
+let current = -1;        // index into visible()
+let anchor = -1;
+let filter = "all";
+let shown = [];           // the list on the left; fixed until the filter changes
+let saveTimer = null;
+
+/* ── Remember the folder between visits ── */
+
+const idb = () => new Promise((res, rej) => {
+  const r = indexedDB.open("tag-photos", 1);
+  r.onupgradeneeded = () => r.result.createObjectStore("kv");
+  r.onsuccess = () => res(r.result);
+  r.onerror = () => rej(r.error);
+});
+async function remember(handle) {
+  try { const db = await idb(); db.transaction("kv", "readwrite").objectStore("kv").put(handle, "dir"); } catch {}
+}
+async function recall() {
+  try {
+    const db = await idb();
+    return await new Promise((res) => {
+      const r = db.transaction("kv").objectStore("kv").get("dir");
+      r.onsuccess = () => res(r.result); r.onerror = () => res(null);
+    });
+  } catch { return null; }
+}
+
+/* ── Opening a folder ── */
+
+async function openFolder(picked) {
+  let photos = picked;
+  try { photos = await picked.getDirectoryHandle("photos"); } catch {}
+  dir = photos;
+  remember(picked);
+
+  files = [];
+  async function walk(d, prefix) {
+    for await (const [name, h] of d.entries()) {
+      if (h.kind === "directory") await walk(h, prefix + name + "/");
+      else if (IMAGE.test(name)) files.push({ path: prefix + name, handle: h });
+    }
+  }
+  await walk(dir, "");
+  files.sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true }));
+
+  tags = {};
+  try {
+    const text = await (await (await dir.getFileHandle("tags.json")).getFile()).text();
+    const raw = JSON.parse(text);
+    for (const [p, t] of Object.entries(raw))
+      tags[p] = Object.fromEntries(KINDS.map((k) => [k.key, [...(t[k.key] ?? [])]]));
+  } catch {}
+
+  $("#folderName").textContent = picked.name === dir.name ? dir.name : `${picked.name} / ${dir.name}`;
+  $("#welcome").hidden = true;
+  $("#app").hidden = false;
+  $("#filter").hidden = false;
+  if (!files.length) {
+    $("#preview").innerHTML = `<p class="caption" style="position:static">No photos in this folder yet.</p>`;
+  }
+  refilter();
+  select(0);
+}
+
+$("#open").onclick = async () => {
+  try { await openFolder(await showDirectoryPicker({ mode: "readwrite", id: "tag-photos" })); }
+  catch (e) { if (e.name !== "AbortError") alert(e.message); }
+};
+
+(async () => {
+  if (!window.showDirectoryPicker) {
+    $("#unsupported").hidden = false; $("#openArea").hidden = true; return;
+  }
+  const saved = await recall();
+  if (saved) {
+    const b = $("#reopen");
+    b.textContent = `Continue with “${saved.name}”`;
+    b.hidden = false;
+    b.onclick = async () => {
+      if ((await saved.requestPermission({ mode: "readwrite" })) === "granted") openFolder(saved);
+    };
+  }
+})();
+
+/* ── Data helpers ── */
+
+const tagsOf = (path) => (tags[path] ??= { people: [], places: [], things: [] });
+const isTagged = (path) => KINDS.some((k) => tags[path]?.[k.key]?.length);
+const visible = () => shown;
+const refilter = () => { shown = filter === "untagged" ? files.filter((f) => !isTagged(f.path)) : files; };
+
+function allNames(kind) {
+  const seen = new Map();
+  for (const t of Object.values(tags)) for (const n of t[kind] ?? []) seen.set(n.toLowerCase(), n);
+  return [...seen.values()].sort((a, b) => a.localeCompare(b));
+}
+
+function canonical(kind, name) {
+  name = name.trim().replace(/\s+/g, " ");
+  if (!name) return null;
+  for (const k of KINDS) {
+    const hit = allNames(k.key).find((n) => n.toLowerCase() === name.toLowerCase());
+    if (hit) return hit;
+  }
+  return name;
+}
+
+function addTag(kind, name) {
+  name = canonical(kind, name);
+  if (!name) return;
+  for (const p of selected) {
+    const list = tagsOf(p)[kind];
+    if (!list.some((n) => n.toLowerCase() === name.toLowerCase())) list.push(name);
+  }
+  changed();
+}
+
+function removeTag(kind, name) {
+  for (const p of selected) {
+    const t = tagsOf(p);
+    t[kind] = t[kind].filter((n) => n !== name);
+  }
+  changed();
+}
+
+function changed() {
+  renderPanel();
+  renderThumbDots();
+  $("#status").textContent = "…";
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(save, 400);
+}
+
+async function save() {
+  // One line per photo keeps the file readable (and GitHub Desktop's changes list tidy).
+  const lines = Object.keys(tags).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+    .filter((p) => isTagged(p))
+    .map((p) => {
+      const t = Object.fromEntries(KINDS.filter((k) => tags[p][k.key].length).map((k) => [k.key, tags[p][k.key]]));
+      return `  ${JSON.stringify(p)}: ${JSON.stringify(t)}`;
+    });
+  const text = `{\n${lines.join(",\n")}\n}\n`;
+  try {
+    const w = await (await dir.getFileHandle("tags.json", { create: true })).createWritable();
+    await w.write(text);
+    await w.close();
+    $("#status").textContent = "Saved";
+  } catch (e) {
+    $("#status").textContent = "Not saved!";
+    alert("Could not save tags.json: " + e.message);
+  }
+}
+
+/* ── Selection ── */
+
+function select(i, mode = "single") {
+  const list = visible();
+  if (!list.length) { selected.clear(); current = -1; render(); return; }
+  i = Math.max(0, Math.min(list.length - 1, i));
+  const path = list[i].path;
+  if (mode === "toggle") {
+    selected.has(path) && selected.size > 1 ? selected.delete(path) : selected.add(path);
+    anchor = i;
+  } else if (mode === "range" && anchor >= 0) {
+    selected.clear();
+    const [a, b] = [Math.min(anchor, i), Math.max(anchor, i)];
+    for (let j = a; j <= b; j++) selected.add(list[j].path);
+  } else {
+    selected = new Set([path]);
+    anchor = i;
+  }
+  current = i;
+  render();
+  $("#thumbs").children[i]?.scrollIntoView({ block: "nearest" });
+}
+
+$("#filter").onclick = (e) => {
+  const f = e.target.dataset.f;
+  if (!f) return;
+  filter = f;
+  for (const b of $("#filter").children) b.classList.toggle("on", b.dataset.f === f);
+  selected.clear();
+  refilter();
+  select(0);
+};
+
+/* ── Thumbnails (made small on the fly, only when scrolled into view) ── */
+
+const thumbCache = new Map();
+const queue = [];
+let busy = 0;
+const io = new IntersectionObserver((entries) => {
+  for (const e of entries) if (e.isIntersecting) { io.unobserve(e.target); queue.push(e.target); pump(); }
+}, { root: $("#thumbs"), rootMargin: "400px" });
+
+async function pump() {
+  while (busy < 3 && queue.length) {
+    const el = queue.shift();
+    busy++;
+    thumbUrl(el.dataset.path).then((url) => {
+      if (url) el.querySelector("img").src = url;
+    }).finally(() => { busy--; pump(); });
+  }
+}
+
+async function thumbUrl(path) {
+  if (thumbCache.has(path)) return thumbCache.get(path);
+  const f = files.find((x) => x.path === path);
+  try {
+    const bmp = await createImageBitmap(await f.handle.getFile(), { resizeWidth: 240, resizeQuality: "medium" });
+    const c = new OffscreenCanvas(bmp.width, bmp.height);
+    c.getContext("2d").drawImage(bmp, 0, 0);
+    const url = URL.createObjectURL(await c.convertToBlob({ type: "image/jpeg", quality: 0.8 }));
+    thumbCache.set(path, url);
+    return url;
+  } catch { return null; }
+}
+
+/* ── Rendering ── */
+
+function render() {
+  renderThumbs();
+  renderPreview();
+  renderPanel();
+}
+
+function renderThumbs() {
+  const list = visible();
+  const box = $("#thumbs");
+  box.replaceChildren(...list.map((f, i) => {
+    const el = document.createElement("div");
+    el.className = "thumb";
+    el.dataset.path = f.path;
+    el.title = f.path;
+    el.innerHTML = `<img alt="">`;
+    if (thumbCache.has(f.path)) el.querySelector("img").src = thumbCache.get(f.path);
+    else io.observe(el);
+    el.onclick = (e) => select(i, e.shiftKey ? "range" : e.ctrlKey || e.metaKey ? "toggle" : "single");
+    return el;
+  }));
+  renderThumbDots();
+  const total = files.length, done = files.filter((f) => isTagged(f.path)).length;
+  $("#count").textContent = total ? `${done} / ${total} tagged` : "";
+}
+
+function renderThumbDots() {
+  for (const el of $("#thumbs").children) {
+    const p = el.dataset.path;
+    el.classList.toggle("sel", selected.has(p));
+    el.classList.toggle("cur", visible()[current]?.path === p);
+    const dot = el.querySelector(".dot");
+    if (!isTagged(p) && !dot) el.insertAdjacentHTML("beforeend", `<span class="dot" title="No tags yet"></span>`);
+    if (isTagged(p) && dot) dot.remove();
+  }
+  const total = files.length, done = files.filter((f) => isTagged(f.path)).length;
+  if (total) $("#count").textContent = `${done} / ${total} tagged`;
+}
+
+let previewUrl = null;
+async function renderPreview() {
+  const box = $("#preview");
+  if (previewUrl) { URL.revokeObjectURL(previewUrl); previewUrl = null; }
+  if (selected.size > 1) {
+    const paths = [...selected].slice(0, 9);
+    box.innerHTML = `<div><div class="stack"></div></div><p class="caption">${selected.size} photos selected — tags apply to all of them</p>`;
+    for (const p of paths) {
+      const img = document.createElement("img");
+      thumbUrl(p).then((u) => u && (img.src = u));
+      box.querySelector(".stack").append(img);
+    }
+    return;
+  }
+  const f = visible()[current];
+  if (!f) { box.innerHTML = ""; return; }
+  const url = URL.createObjectURL(await f.handle.getFile());
+  if (visible()[current] !== f) { URL.revokeObjectURL(url); return; }
+  previewUrl = url;
+  box.innerHTML = `<img alt=""><p class="caption"></p>`;
+  box.querySelector("img").src = url;
+  box.querySelector(".caption").textContent = f.path;
+}
+
+function renderPanel() {
+  const box = $("#kinds");
+  const focused = document.activeElement?.dataset?.kind;
+  box.replaceChildren(...KINDS.map((k, n) => {
+    const sec = document.createElement("section");
+    sec.className = "kind";
+    sec.innerHTML = `<h2>${k.label}<kbd>${n + 1}</kbd></h2><div class="chips"></div>
+      <input data-kind="${k.key}" list="dl-${k.key}" placeholder="Add ${k.label.toLowerCase()}…" autocomplete="off">
+      <datalist id="dl-${k.key}"></datalist>`;
+    const chips = sec.querySelector(".chips");
+    const names = allNames(k.key);
+    if (!selected.size) return sec;
+    const on = (name) => [...selected].filter((p) => tagsOf(p)[k.key].includes(name)).length;
+
+    // Tags on the selection first, then every other tag of this kind for one-click reuse.
+    const sorted = [...names].sort((a, b) => (on(b) > 0) - (on(a) > 0) || a.localeCompare(b));
+    for (const name of sorted) {
+      const count = on(name);
+      const chip = document.createElement("button");
+      chip.className = "chip" + (count === selected.size ? " on" : count ? " part" : "");
+      chip.textContent = name;
+      chip.onclick = () => count === selected.size ? removeTag(k.key, name) : addTag(k.key, name);
+      chips.append(chip);
+    }
+    sec.querySelector("datalist").innerHTML = names.map((n) => `<option value="${n.replace(/"/g, "&quot;")}">`).join("");
+    const input = sec.querySelector("input");
+    input.onkeydown = (e) => {
+      if (e.key === "Enter") { addTag(k.key, input.value); $(`input[data-kind="${k.key}"]`)?.focus(); }
+      if (e.key === "Escape") input.blur();
+    };
+    return sec;
+  }));
+  if (focused) $(`input[data-kind="${focused}"]`)?.focus();
+}
+
+/* ── Keyboard ── */
+
+document.addEventListener("keydown", (e) => {
+  if ($("#app").hidden || e.target.tagName === "INPUT") return;
+  if (e.key === "ArrowRight" || e.key === "ArrowDown") { e.preventDefault(); select(current + (e.key === "ArrowDown" ? 3 : 1)); }
+  if (e.key === "ArrowLeft" || e.key === "ArrowUp") { e.preventDefault(); select(current - (e.key === "ArrowUp" ? 3 : 1)); }
+  const n = Number(e.key);
+  if (n >= 1 && n <= 3) { e.preventDefault(); $(`input[data-kind="${KINDS[n - 1].key}"]`)?.focus(); }
+});
+
+window.__openFolder = openFolder; // for testing
+</script>
+</body>
+</html>
