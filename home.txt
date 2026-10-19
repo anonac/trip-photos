@@ -1,0 +1,10 @@
+# The 16 subjects on the home page, in order:
+# top row first, then left to right (1, 2, 3, 4, 3, 2, 1).
+#
+# Write the keyword exactly as in Lightroom, one per line.
+# To choose the cover, add " | " and the photo's file name:
+#
+#   Marul | DSC_0042.jpg
+#   Istanbul
+#
+# Empty spots are filled with the most photographed subjects.
