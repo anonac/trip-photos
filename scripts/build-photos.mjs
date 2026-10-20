@@ -150,13 +150,17 @@ async function main() {
         ({ width: w, height: h } = await sharp(out).metadata());
       }
     }
+    // Full-size JPEG for the download button, also without metadata.
+    const full = path.join(OUT, `${id}.jpg`);
+    keep.add(`${id}.jpg`);
+    if (await newer(src, full)) await sharp(src).rotate().jpeg({ quality: 92, mozjpeg: true }).toFile(full);
 
     const file = rel.replace(/\\/g, "/");
     const name = path.basename(rel).replace(/\.[^.]+$/, "");
     const v = name.match(VERSION);
     const date = meta.DateTimeOriginal ?? meta.CreateDate ?? null;
     images.push({
-      id, file, w, h,
+      id, file, w, h, name: `${name}.jpg`, // download name
       date: date instanceof Date && !isNaN(date) ? date.toISOString() : null,
       group: path.posix.dirname(file) + "/" + (v ? v[1] : name).toLowerCase(),
       version: v ? Number(v[2]) : 0,
@@ -183,10 +187,10 @@ async function main() {
     }
     if (!all.size) console.warn(`! ${main.file} has no tags`);
     photos.push({
-      id: main.id, file: main.file, w: main.w, h: main.h,
+      id: main.id, file: main.file, name: main.name, w: main.w, h: main.h,
       date: main.date ?? versions.find((v) => v.date)?.date ?? null,
       tags: [...all.keys()],
-      ...(versions.length > 1 && { versions: versions.map(({ id, w, h }) => ({ id, w, h })) }),
+      ...(versions.length > 1 && { versions: versions.map(({ id, name, w, h }) => ({ id, name, w, h })) }),
     });
   }
 

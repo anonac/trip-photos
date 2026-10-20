@@ -2,7 +2,7 @@ import raw from "./photos.gen.json";
 
 export type Kind = "person" | "place" | "thing";
 export type Tag = { slug: string; name: string; kind: Kind };
-export type Version = { id: string; w: number; h: number };
+export type Version = { id: string; name: string; w: number; h: number };
 /** A photo, plus its other versions (black and white, edits…) when it has any. */
 export type Photo = Version & { date: string | null; tags: string[]; versions?: Version[] };
 
@@ -31,3 +31,5 @@ export const home = data.home
 
 export const src = (p: Version, size: "s" | "l") => `img/${p.id}-${size}.webp`;
 export const srcOf = (id: string, size: "s" | "l") => `img/${id}-${size}.webp`;
+/** Full-size JPEG for downloading. */
+export const fullOf = (v: Version) => `img/${v.id}.jpg`;

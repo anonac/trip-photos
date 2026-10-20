@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ImgHTMLAttributes, type ReactNode, type TouchEvent } from "react";
 import { back, go, href, onLinkClick, swap, useRoute } from "./router";
-import { home, photoById, photos, photosByTag, src, srcOf, tagBySlug, type Photo, type Tag, type Version } from "./data";
+import { fullOf, home, photoById, photos, photosByTag, src, srcOf, tagBySlug, type Photo, type Tag, type Version } from "./data";
 
 const DIAMOND = [1, 2, 3, 4, 3, 2, 1];
 const KIND_ORDER = ["person", "place", "thing"] as const;
@@ -156,12 +156,17 @@ function JustifiedGrid({ photos, link }: { photos: Photo[]; link: (p: Photo) => 
  * top-right corner. Click the photo, a peeking card, or a number to flip
  * through them; ↑ ↓ on the keyboard.
  */
-function VersionStack({ photo, alt, children }: { photo: Photo; alt: string; children?: ReactNode }) {
+function VersionStack({ photo, alt, current, setCurrent, children }: {
+  photo: Photo;
+  alt: string;
+  current: number;
+  setCurrent: (i: number) => void;
+  children?: ReactNode;
+}) {
   const versions: Version[] = photo.versions ?? [photo];
   const n = versions.length;
-  const [current, setCurrent] = useState(0);
   const front = versions[current];
-  const cycle = (by: number) => setCurrent((c) => (c + by + n) % n);
+  const cycle = (by: number) => setCurrent((current + by + n) % n);
 
   useEffect(() => {
     if (n < 2) return;
@@ -172,7 +177,7 @@ function VersionStack({ photo, alt, children }: { photo: Photo; alt: string; chi
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [photo]);
+  });
 
   return (
     <>
@@ -214,12 +219,20 @@ function PhotoView({ id, tag }: { id: string; tag?: string }) {
   const to = (p: Photo) => (tag ? href("t", tag, p.id) : href("p", p.id));
   const close = () => back(tag ? href("t", tag) : "#/");
 
+  // Which version is in front (back to the first one on every new photo).
+  const [shown, setShown] = useState({ id, version: 0 });
+  const version = shown.id === id ? shown.version : 0;
+  const setVersion = (v: number) => setShown({ id, version: v });
+  const front = (photo.versions ?? [photo])[version];
+  const [zoomed, setZoomed] = useState(false);
+
   // Keyboard: ← → to browse, Esc to close.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "ArrowLeft" && prev) swap(to(prev));
       else if (e.key === "ArrowRight" && next) swap(to(next));
       else if (e.key === "Escape") close();
+      else if (e.key === "z" || e.key === "Z") setZoomed(true);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -253,13 +266,24 @@ function PhotoView({ id, tag }: { id: string; tag?: string }) {
     <main className="photo">
       <header className="bar">
         <span className="mark-spacer" />
-        <button className="close" onClick={close} aria-label="Close" />
+        <div className="actions">
+          <button className="icon" onClick={() => setZoomed(true)} aria-label="Zoom" title="Zoom (Z)">
+            <svg viewBox="0 0 20 20"><circle cx="8.5" cy="8.5" r="5.5" /><path d="M12.5 12.5 17 17M6 8.5h5M8.5 6v5" /></svg>
+          </button>
+          <a className="icon" href={fullOf(front)} download={front.name} aria-label="Download" title="Download">
+            <svg viewBox="0 0 20 20"><path d="M10 3v10M5.5 8.5 10 13l4.5-4.5M4 17h12" /></svg>
+          </a>
+          <button className="close" onClick={close} aria-label="Close" />
+        </div>
       </header>
+      {zoomed && <Zoom version={front} onClose={() => setZoomed(false)} />}
 
       <figure className="photo-frame" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
         <VersionStack
           key={photo.id}
           photo={photo}
+          current={version}
+          setCurrent={setVersion}
           alt={photo.tags.map((s) => tagBySlug.get(s)?.name).join(", ")}
         >
           {prev && <a className="step step-prev" href={to(prev)} onClick={(e) => { e.preventDefault(); swap(to(prev)); }} aria-label="Previous" />}
@@ -284,5 +308,47 @@ function PhotoView({ id, tag }: { id: string; tag?: string }) {
         ))}
       </nav>
     </main>
+  );
+}
+
+/**
+ * The photo at full size over the whole screen. With a mouse, the view follows
+ * the pointer; on touch screens you drag to look around. Click / tap / Esc closes.
+ */
+function Zoom({ version, onClose }: { version: Version; onClose: () => void }) {
+  const box = useRef<HTMLDivElement>(null);
+  const followsPointer = matchMedia("(hover: hover) and (pointer: fine)").matches;
+
+  useEffect(() => {
+    // Capture keys first so ← → Esc don't also act on the page underneath.
+    const onKey = (e: KeyboardEvent) => {
+      e.stopPropagation();
+      if (e.key === "Escape" || e.key === "z" || e.key === "Z") onClose();
+    };
+    window.addEventListener("keydown", onKey, true);
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      document.body.style.overflow = "";
+    };
+  }, [onClose]);
+
+  const lookAt = (fx: number, fy: number) => {
+    const b = box.current!;
+    b.scrollLeft = (b.scrollWidth - b.clientWidth) * fx;
+    b.scrollTop = (b.scrollHeight - b.clientHeight) * fy;
+  };
+
+  return (
+    <div
+      ref={box}
+      className={followsPointer ? "zoom follows-pointer" : "zoom"}
+      onClick={onClose}
+      onMouseMove={followsPointer ? (e) => lookAt(e.clientX / innerWidth, e.clientY / innerHeight) : undefined}
+      role="dialog"
+      aria-label="Zoomed photo"
+    >
+      <img src={src(version, "l")} width={version.w} height={version.h} alt="" onLoad={() => lookAt(0.5, 0.5)} />
+    </div>
   );
 }
