@@ -5,7 +5,10 @@
 // the lowest number is the main one, the rest sit behind it on the photo page.
 // Tags from every version are combined, so tagging one version is enough.
 //
-// Keywords (Lightroom Classic keyword hierarchy):
+// Tags are read from the photo itself and from its .xmp sidecar (darktable, digiKam…),
+// i.e. photo.jpg.xmp or photo.xmp next to it.
+//
+// Keywords (Lightroom Classic / darktable keyword hierarchy):
 //   People|Marul            -> person  "Marul"
 //   Places|Turkey|Istanbul  -> place   "Turkey" and "Istanbul"
 //   Things|Ferry            -> thing   "Ferry"
@@ -35,6 +38,9 @@ const KIND_ROOTS = {
   things: "thing", thing: "thing", objects: "thing",
 };
 
+// Tags that photo apps add on their own.
+const IGNORED_ROOTS = new Set(["darktable"]);
+
 const slugify = (s) =>
   s.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase()
     .replace(/ı/g, "i").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "x";
@@ -46,6 +52,7 @@ function readTags(meta, fromFile = {}) {
   const tags = []; // [{ name, kind }] in display order
   const seen = new Set();
   const add = (name, kind) => {
+    name = name.replace(/&amp;/g, "&").replace(/_/g, " ").trim(); // leh_market -> "leh market"
     const key = slugify(name);
     if (seen.has(key)) return;
     seen.add(key);
@@ -55,15 +62,21 @@ function readTags(meta, fromFile = {}) {
   for (const [field, kind] of [["people", "person"], ["places", "place"], ["things", "thing"]])
     for (const name of list(fromFile[field])) add(name, kind);
 
+  // Every word that is part of a hierarchy; the flat keyword list repeats them.
+  const inHierarchy = new Set();
   for (const entry of list(meta.hierarchicalSubject)) {
     const parts = entry.split("|").map((p) => p.trim()).filter(Boolean);
-    const kind = KIND_ROOTS[parts[0]?.toLowerCase()];
+    parts.forEach((p) => inHierarchy.add(p.toLowerCase()));
+    const root = parts[0]?.toLowerCase();
+    if (IGNORED_ROOTS.has(root)) continue; // darktable|format|jpg and friends
+    const kind = KIND_ROOTS[root];
     if (kind) parts.slice(1).forEach((p) => add(p, kind));
     else if (parts.length) add(parts.at(-1), "thing");
   }
 
   for (const kw of [...list(meta.subject), ...list(meta.Keywords)]) {
     if (KIND_ROOTS[kw.toLowerCase()]) continue; // the "People"/"Places" parents themselves
+    if (inHierarchy.has(kw.toLowerCase())) continue;
     const m = kw.match(/^(person|people|place|thing)\s*:\s*(.+)$/i);
     if (m) add(m[2].trim(), KIND_ROOTS[m[1].toLowerCase()]);
     else add(kw, "thing");
@@ -107,6 +120,19 @@ async function main() {
       meta = (await exifr.parse(src, { xmp: true, iptc: true, exif: true, tiff: true, mergeOutput: true })) ?? {};
     } catch (e) {
       console.warn(`! could not read metadata of ${rel}: ${e.message}`);
+    }
+    for (const sidecar of [`${src}.xmp`, src.replace(/\.[^.]+$/, ".xmp")]) {
+      if (!existsSync(sidecar)) continue;
+      try {
+        const side = (await exifr.sidecar(sidecar)) ?? {}; // grouped by namespace: { dc: {…}, lr: {…} }
+        meta.hierarchicalSubject = [...list(meta.hierarchicalSubject), ...list(side.lr?.hierarchicalSubject)];
+        meta.subject = [...list(meta.subject), ...list(side.dc?.subject)];
+        const d = String(side.exif?.DateTimeOriginal ?? "").match(/^(\d{4}):(\d\d):(\d\d)[ T](\d\d):(\d\d):(\d\d)/);
+        if (d && !meta.DateTimeOriginal) meta.DateTimeOriginal = new Date(`${d[1]}-${d[2]}-${d[3]}T${d[4]}:${d[5]}:${d[6]}`);
+      } catch (e) {
+        console.warn(`! could not read ${path.basename(sidecar)}: ${e.message}`);
+      }
+      break;
     }
 
     let w, h;

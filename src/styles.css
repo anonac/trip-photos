@@ -127,7 +127,7 @@ img.is-loaded { opacity: 1; }
   aspect-ratio: var(--ratio);
   margin: 0 auto;
 }
-.stack.has-versions { --room: calc(100svh - 56px - 72px - 44px); margin-top: 18px; }
+.stack.has-versions { --room: calc(100svh - 56px - 72px - 58px); margin-top: 18px; }
 .layer {
   position: absolute;
   inset: 0;

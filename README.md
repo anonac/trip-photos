@@ -19,6 +19,15 @@ There are two ways to tag. You can use either one, or both together.
 
 Tip: add both `Turkey` and `Istanbul` as places if you want the photo under both.
 
+### Option C — darktable tags
+
+Tag in darktable as usual. Its `.xmp` sidecar files (`photo.jpg.xmp`) go in `photos/` next to the
+photos — the site reads the tags from them. darktable's own automatic tags (`darktable|format|jpg`) are ignored,
+and underscores show as spaces (`leh_market` → "leh market").
+
+To have people and places grouped on the photo page, tag them as `people|sarthak` and `places|likir`
+(darktable's tagging module creates the hierarchy when you type the `|`). Plain tags count as things.
+
 ### Option B — Lightroom Classic keywords
 
 1. **Tag in Lightroom Classic** using a keyword hierarchy (Library → Keyword List):

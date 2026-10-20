@@ -8,3 +8,26 @@
 #   Istanbul
 #
 # Empty spots are filled with the most photographed subjects.
+
+likir | camp_likir_wide1_2.jpg
+
+sarthak | sarthak_likir_portrait_1.jpg
+manish | photo_8_2026-10-20_08-04-06.jpg
+
+leh market | mannequin2_leh_portrait_1.jpg
+thiksey | photo_7_2026-10-20_08-04-06.jpg
+pushkar | pushkar_rambirpore_wide_1.jpg
+
+wasim | wasim_dtk_portrait_2.jpg
+divyansh | divyansh_fvp_portrait_1.jpg
+pallavi | photo_16_2026-10-20_08-04-06.jpg
+abhynoy | abhynoy_dtk_portrait_1.jpg
+
+rambirpore | manish_rambirpore_wide_1.jpg
+flowers | flowers_likir_closeup_1.jpg
+first view point | sarthak_fvp_portrait_2.jpg
+
+dtk | wasim_dtk_portrait_1.jpg
+patharsahib | manish_patharasahib_medium_1.jpg
+
+camp | camp_likir_wide2_1.jpg
