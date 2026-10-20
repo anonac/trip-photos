@@ -199,7 +199,10 @@ $("#open").onclick = async () => {
 /* ── Data helpers ── */
 
 const tagsOf = (path) => (tags[path] ??= { people: [], places: [], things: [] });
-const isTagged = (path) => KINDS.some((k) => tags[path]?.[k.key]?.length);
+// name_1.jpg, name_2.jpg … are versions of one photo; tagging any one of them covers all.
+const groupOf = (path) => path.replace(/\.[^.]+$/, "").replace(/[_-]\d{1,2}$/, "").toLowerCase();
+const hasTags = (path) => KINDS.some((k) => tags[path]?.[k.key]?.length);
+const isTagged = (path) => hasTags(path) || files.some((f) => f.path !== path && hasTags(f.path) && groupOf(f.path) === groupOf(path));
 const visible = () => shown;
 const refilter = () => { shown = filter === "untagged" ? files.filter((f) => !isTagged(f.path)) : files; };
 
@@ -248,7 +251,7 @@ function changed() {
 async function save() {
   // One line per photo keeps the file readable (and GitHub Desktop's changes list tidy).
   const lines = Object.keys(tags).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
-    .filter((p) => isTagged(p))
+    .filter((p) => hasTags(p))
     .map((p) => {
       const t = Object.fromEntries(KINDS.filter((k) => tags[p][k.key].length).map((k) => [k.key, tags[p][k.key]]));
       return `  ${JSON.stringify(p)}: ${JSON.stringify(t)}`;

@@ -2,7 +2,9 @@ import raw from "./photos.gen.json";
 
 export type Kind = "person" | "place" | "thing";
 export type Tag = { slug: string; name: string; kind: Kind };
-export type Photo = { id: string; w: number; h: number; date: string | null; tags: string[] };
+export type Version = { id: string; w: number; h: number };
+/** A photo, plus its other versions (black and white, edits…) when it has any. */
+export type Photo = Version & { date: string | null; tags: string[]; versions?: Version[] };
 
 type Manifest = {
   photos: Photo[];
@@ -24,7 +26,8 @@ for (const p of photos)
   }
 
 export const home = data.home
-  .map((h) => ({ tag: tagBySlug.get(h.tag)!, cover: h.cover ? photoById.get(h.cover) : undefined }))
+  .map((h) => ({ tag: tagBySlug.get(h.tag)!, cover: h.cover }))
   .filter((h) => h.tag);
 
-export const src = (p: Photo, size: "s" | "l") => `img/${p.id}-${size}.webp`;
+export const src = (p: Version, size: "s" | "l") => `img/${p.id}-${size}.webp`;
+export const srcOf = (id: string, size: "s" | "l") => `img/${id}-${size}.webp`;

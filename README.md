@@ -55,6 +55,19 @@ Tip: add both `Turkey` and `Istanbul` as places if you want the photo under both
 To change tags later: re-tag in Lightroom, re-export over the same file names, push again.
 To remove a photo: delete it from `photos/` and push.
 
+## Versions of a photo (black & white, edits…)
+
+Name the files the same, ending in `_1`, `_2`, `_3`:
+
+    sarthak_likir_portrait_1.jpg   ← the main one, shown in grids
+    sarthak_likir_portrait_2.jpg   ← stacked behind it on the photo page
+    sarthak_likir_portrait_3.jpg
+
+On the photo page the other versions peek out behind the picture; click it (or press ↑ ↓) to flip through.
+Tag any one version — the tags apply to all of them. Only 1–2 digit endings count,
+so camera names like `DSC_0001.jpg` are never mistaken for versions.
+A home page cover in `home.txt` can be any version, e.g. `Sarthak | sarthak_likir_portrait_2.jpg`.
+
 ## Choosing the home page
 
 Edit [`home.txt`](home.txt): one subject per line, in order (rows of 1, 2, 3, 4, 3, 2, 1).

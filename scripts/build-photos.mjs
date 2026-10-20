@@ -1,6 +1,10 @@
 // Reads every image in /photos, pulls its Lightroom keywords, writes web-sized
 // copies to public/img and a manifest to src/photos.gen.json.
 //
+// Files named like sarthak_likir_portrait_1.jpg, _2.jpg … are versions of one photo:
+// the lowest number is the main one, the rest sit behind it on the photo page.
+// Tags from every version are combined, so tagging one version is enough.
+//
 // Keywords (Lightroom Classic keyword hierarchy):
 //   People|Marul            -> person  "Marul"
 //   Places|Turkey|Istanbul  -> place   "Turkey" and "Istanbul"
@@ -22,6 +26,8 @@ const HOME_FILE = path.join(ROOT, "home.txt");
 const HOME_SPOTS = 16; // 1 + 2 + 3 + 4 + 3 + 2 + 1
 const SIZES = { s: 800, l: 2400 };
 const IMAGE = /\.(jpe?g|png|webp|tiff?)$/i;
+// Versions of one picture: name_1.jpg, name_2.jpg … (1–2 digits, so camera names like DSC_0001 don't count).
+const VERSION = /^(.+)[_-](\d{1,2})$/;
 
 const KIND_ROOTS = {
   people: "person", person: "person", persons: "person",
@@ -85,8 +91,7 @@ async function main() {
     catch (e) { console.warn(`! photos/tags.json could not be read: ${e.message}`); }
   }
 
-  const photos = [];
-  const tags = {};
+  const images = []; // one per file
   const usedIds = new Set();
   const keep = new Set();
 
@@ -120,19 +125,43 @@ async function main() {
       }
     }
 
-    const photoTags = readTags(meta, tagFile[rel.replace(/\\/g, "/")]);
-    for (const t of photoTags) {
-      const slug = slugify(t.name);
+    const file = rel.replace(/\\/g, "/");
+    const name = path.basename(rel).replace(/\.[^.]+$/, "");
+    const v = name.match(VERSION);
+    const date = meta.DateTimeOriginal ?? meta.CreateDate ?? null;
+    images.push({
+      id, file, w, h,
+      date: date instanceof Date && !isNaN(date) ? date.toISOString() : null,
+      group: path.posix.dirname(file) + "/" + (v ? v[1] : name).toLowerCase(),
+      version: v ? Number(v[2]) : 0,
+      tags: readTags(meta, tagFile[file]),
+    });
+  }
+
+  const groups = new Map();
+  for (const img of images) {
+    if (!groups.has(img.group)) groups.set(img.group, []);
+    groups.get(img.group).push(img);
+  }
+
+  const photos = [];
+  const tags = {};
+  for (const versions of groups.values()) {
+    versions.sort((a, b) => a.version - b.version || a.file.localeCompare(b.file));
+    const main = versions[0];
+    const all = new Map(); // slug -> { name, kind }, across every version
+    for (const v of versions) for (const t of v.tags) if (!all.has(slugify(t.name))) all.set(slugify(t.name), t);
+    for (const [slug, t] of all) {
       tags[slug] ??= { name: t.name, kind: t.kind, count: 0 };
       tags[slug].count++;
     }
-    const date = meta.DateTimeOriginal ?? meta.CreateDate ?? null;
+    if (!all.size) console.warn(`! ${main.file} has no tags`);
     photos.push({
-      id, file: rel.replace(/\\/g, "/"), w, h,
-      date: date instanceof Date && !isNaN(date) ? date.toISOString() : null,
-      tags: photoTags.map((t) => slugify(t.name)),
+      id: main.id, file: main.file, w: main.w, h: main.h,
+      date: main.date ?? versions.find((v) => v.date)?.date ?? null,
+      tags: [...all.keys()],
+      ...(versions.length > 1 && { versions: versions.map(({ id, w, h }) => ({ id, w, h })) }),
     });
-    if (!photoTags.length) console.warn(`! ${rel} has no keywords`);
   }
 
   photos.sort((a, b) => (a.date ?? "").localeCompare(b.date ?? "") || a.file.localeCompare(b.file));
@@ -148,10 +177,12 @@ async function main() {
     const [name, cover] = line.split("|").map((s) => s.trim());
     const slug = slugify(name);
     if (!tags[slug]) { console.warn(`! home.txt: no photo is tagged "${name}"`); continue; }
-    const coverPhoto = cover && photos.find((p) => p.file === cover || path.basename(p.file) === cover);
-    if (cover && !coverPhoto) console.warn(`! home.txt: cover "${cover}" not found in /photos`);
+    // The cover can be any version, e.g. the black-and-white one.
+    const coverImage = cover && images.find((p) => p.file === cover || path.basename(p.file) === cover);
+    const coverPhoto = coverImage && photos.find((p) => p.id === coverImage.id || p.versions?.some((v) => v.id === coverImage.id));
+    if (cover && !coverImage) console.warn(`! home.txt: cover "${cover}" not found in /photos`);
     if (coverPhoto && !coverPhoto.tags.includes(slug)) console.warn(`! home.txt: "${cover}" is not tagged "${name}" (using it anyway)`);
-    if (!home.some((h) => h.tag === slug)) home.push({ tag: slug, cover: coverPhoto?.id });
+    if (!home.some((h) => h.tag === slug)) home.push({ tag: slug, cover: coverImage?.id });
   }
   const byCount = Object.keys(tags).sort((a, b) => tags[b].count - tags[a].count || a.localeCompare(b));
   for (const slug of byCount) {
@@ -162,7 +193,7 @@ async function main() {
 
   const tagOut = Object.fromEntries(Object.entries(tags).map(([s, t]) => [s, { name: t.name, kind: t.kind }]));
   await writeFile(MANIFEST, JSON.stringify({ photos, tags: tagOut, home: home.slice(0, HOME_SPOTS) }));
-  console.log(`✓ ${photos.length} photos, ${Object.keys(tags).length} subjects`);
+  console.log(`✓ ${photos.length} photos (${images.length} files), ${Object.keys(tags).length} subjects`);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

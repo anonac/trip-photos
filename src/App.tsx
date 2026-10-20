@@ -1,6 +1,6 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ImgHTMLAttributes, type TouchEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ImgHTMLAttributes, type ReactNode, type TouchEvent } from "react";
 import { back, go, href, onLinkClick, swap, useRoute } from "./router";
-import { home, photoById, photos, photosByTag, src, tagBySlug, type Photo, type Tag } from "./data";
+import { home, photoById, photos, photosByTag, src, srcOf, tagBySlug, type Photo, type Tag, type Version } from "./data";
 
 const DIAMOND = [1, 2, 3, 4, 3, 2, 1];
 const KIND_ORDER = ["person", "place", "thing"] as const;
@@ -57,7 +57,7 @@ function HomeView() {
                   onClick={onLinkClick}
                   aria-label={cell.tag.name}
                 >
-                  {cell.cover && <Img src={src(cell.cover, "s")} alt="" />}
+                  {cell.cover && <Img src={srcOf(cell.cover, "s")} alt="" />}
                   <span className="tile-name">{cell.tag.name}</span>
                 </a>
               ) : (
@@ -151,6 +151,60 @@ function JustifiedGrid({ photos, link }: { photos: Photo[]; link: (p: Photo) => 
 
 /* ── Photo: the picture, and its tags in one quiet line ────────── */
 
+/**
+ * The photo with its other versions stacked behind it, peeking out at the
+ * top-right corner. Click the photo, a peeking card, or a number to flip
+ * through them; ↑ ↓ on the keyboard.
+ */
+function VersionStack({ photo, alt, children }: { photo: Photo; alt: string; children?: ReactNode }) {
+  const versions: Version[] = photo.versions ?? [photo];
+  const n = versions.length;
+  const [current, setCurrent] = useState(0);
+  const front = versions[current];
+  const cycle = (by: number) => setCurrent((c) => (c + by + n) % n);
+
+  useEffect(() => {
+    if (n < 2) return;
+    for (const v of versions) new Image().src = src(v, "l");
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "ArrowDown") { e.preventDefault(); cycle(1); }
+      if (e.key === "ArrowUp") { e.preventDefault(); cycle(-1); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [photo]);
+
+  return (
+    <>
+      <div className={n > 1 ? "stack has-versions" : "stack"} style={{ "--ratio": front.w / front.h } as CSSProperties}>
+        {versions.map((v, i) => {
+          const depth = (i - current + n) % n;
+          return (
+            <Img
+              key={v.id}
+              src={src(v, "l")}
+              alt={depth === 0 ? alt : ""}
+              className={`layer depth-${Math.min(depth, 3)}`}
+              style={{ zIndex: n - depth }}
+              onClick={n > 1 ? () => (depth ? setCurrent(i) : cycle(1)) : undefined}
+            />
+          );
+        })}
+        {children}
+      </div>
+      {n > 1 && (
+        <div className="versions">
+          {versions.map((v, i) => (
+            <button key={v.id} className={i === current ? "is-current" : ""} onClick={() => setCurrent(i)} aria-label={`Version ${i + 1}`}>
+              {i + 1}
+            </button>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
 function PhotoView({ id, tag }: { id: string; tag?: string }) {
   const photo = photoById.get(id)!;
   const list = tag ? photosByTag.get(tag)! : photos;
@@ -203,15 +257,14 @@ function PhotoView({ id, tag }: { id: string; tag?: string }) {
       </header>
 
       <figure className="photo-frame" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
-        <Img
+        <VersionStack
           key={photo.id}
-          src={src(photo, "l")}
-          width={photo.w}
-          height={photo.h}
+          photo={photo}
           alt={photo.tags.map((s) => tagBySlug.get(s)?.name).join(", ")}
-        />
-        {prev && <a className="step step-prev" href={to(prev)} onClick={(e) => { e.preventDefault(); swap(to(prev)); }} aria-label="Previous" />}
-        {next && <a className="step step-next" href={to(next)} onClick={(e) => { e.preventDefault(); swap(to(next)); }} aria-label="Next" />}
+        >
+          {prev && <a className="step step-prev" href={to(prev)} onClick={(e) => { e.preventDefault(); swap(to(prev)); }} aria-label="Previous" />}
+          {next && <a className="step step-next" href={to(next)} onClick={(e) => { e.preventDefault(); swap(to(next)); }} aria-label="Next" />}
+        </VersionStack>
       </figure>
 
       <nav className="tags" aria-label="Tags">
